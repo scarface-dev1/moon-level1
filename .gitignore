@@ -37,6 +37,7 @@ leveldb/
 # (encrypted) contract private state - the identity secret behind every role and
 # the nonce behind every sealed bid. Never commit them.
 .midnight-wallet.json
+.midnight-wallet-state.json
 midnight-level-db/
 **/midnight-level-db/
 

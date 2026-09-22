@@ -4,7 +4,15 @@
 
 import 'dotenv/config';
 import { NETWORK_CONFIGS, resolveWallet, type NetworkConfig, type NetworkId } from './network.js';
-import { buildWallet, ensureDust, nightBalance, stopWallet, waitForFunds, waitForSync } from './wallet.js';
+import {
+  buildWallet,
+  ensureDust,
+  nightBalance,
+  persistWalletState,
+  stopWallet,
+  waitForFunds,
+  waitForSync,
+} from './wallet.js';
 import { assertProofServerReady, configureProviders, resolveZkConfigPath, type Providers } from './providers.js';
 
 export interface Session {
@@ -51,7 +59,17 @@ export const bootstrap = async (network: NetworkId, options: BootstrapOptions = 
   const address = wallet.unshieldedKeystore.getBech32Address().toString();
   console.log(`  Address:  ${address}`);
 
+  const resumed = Object.entries(wallet.restored)
+    .filter(([, ok]) => ok)
+    .map(([kind]) => kind);
+  if (resumed.length > 0) {
+    console.log(`  Resumed:  cached sync state for ${resumed.join(', ')}`);
+  }
+
   await waitForSync(wallet.wallet);
+  // Cache the sync progress immediately: a later failure should not cost the
+  // next run another full sync.
+  await persistWalletState(network, wallet);
 
   if (options.needsFunds !== false) {
     const before = await nightBalance(wallet.wallet);

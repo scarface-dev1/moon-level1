@@ -19,6 +19,13 @@ import {
 } from '@midnight-ntwrk/wallet-sdk';
 import * as Rx from 'rxjs';
 import type { NetworkConfig, NetworkId } from './network.js';
+import {
+  CHILD_KINDS,
+  loadWalletState,
+  saveWalletState,
+  type ChildKind,
+  type PersistedWalletState,
+} from './wallet-state.js';
 
 /** How long to wait for DUST to be generated from registered NIGHT. */
 const DUST_WAIT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -28,6 +35,8 @@ export interface WalletContext {
   readonly shieldedSecretKeys: ReturnType<typeof ledger.ZswapSecretKeys.fromSeed>;
   readonly dustSecretKey: ReturnType<typeof ledger.DustSecretKey.fromSeed>;
   readonly unshieldedKeystore: ReturnType<typeof createKeystore>;
+  /** Which child wallets resumed from cached sync state. */
+  readonly restored: Record<ChildKind, boolean>;
 }
 
 const deriveKeys = (seed: string) => {
@@ -42,8 +51,21 @@ const deriveKeys = (seed: string) => {
   return result.keys;
 };
 
-export const buildWallet = async (network: NetworkId, config: NetworkConfig, seed: string): Promise<WalletContext> => {
+export interface BuildWalletOptions {
+  /** Set false to force a from-seed sync, ignoring any cached state. */
+  readonly restore?: boolean;
+}
+
+export const buildWallet = async (
+  network: NetworkId,
+  config: NetworkConfig,
+  seed: string,
+  options: BuildWalletOptions = {},
+): Promise<WalletContext> => {
   setNetworkId(config.networkId);
+
+  const saved: PersistedWalletState = options.restore === false ? {} : loadWalletState(network);
+  const restored: Record<ChildKind, boolean> = { shielded: false, unshielded: false, dust: false };
 
   const keys = deriveKeys(seed);
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(keys[Roles.Zswap]);
@@ -62,18 +84,63 @@ export const buildWallet = async (network: NetworkId, config: NetworkConfig, see
     costParameters: { additionalFeeOverhead: 300_000_000_000_000n, feeBlocksMargin: 5 },
   };
 
+  // Each child wallet tries to resume from its cached state and falls back to a
+  // from-seed start if the cache is absent or no longer loadable (which happens
+  // after an SDK upgrade). A fallback costs one slow sync, never a crash.
+  const tryRestore = async <T>(kind: ChildKind, cls: unknown, start: () => Promise<T>): Promise<T> => {
+    const cached = saved[kind];
+    if (cached === undefined) return start();
+    try {
+      const value = await (cls as { restore: (s: unknown) => Promise<T> }).restore(cached);
+      restored[kind] = true;
+      return value;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`\n  Could not restore the ${kind} wallet (${message}); syncing from seed instead.\n`);
+      return start();
+    }
+  };
+
   const wallet = await WalletFacade.init({
     configuration: walletConfig,
-    shielded: async (cfg) => ShieldedWallet(cfg).startWithSecretKeys(shieldedSecretKeys),
-    unshielded: async (cfg) => UnshieldedWallet(cfg).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
-    dust: async (cfg) =>
-      DustWallet(cfg).startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust),
+    shielded: async (cfg) => {
+      const cls = ShieldedWallet(cfg);
+      return tryRestore('shielded', cls, async () => cls.startWithSecretKeys(shieldedSecretKeys));
+    },
+    unshielded: async (cfg) => {
+      const cls = UnshieldedWallet(cfg);
+      return tryRestore('unshielded', cls, async () => cls.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)));
+    },
+    dust: async (cfg) => {
+      const cls = DustWallet(cfg);
+      return tryRestore('dust', cls, async () =>
+        cls.startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust),
+      );
+    },
   });
 
   await wallet.start(shieldedSecretKeys, dustSecretKey);
-  void network;
 
-  return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+  return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore, restored };
+};
+
+/**
+ * Serialise each child wallet's sync progress so the next run resumes instead of
+ * starting over. Individual failures are reported but not fatal: losing one
+ * child's cache means that child re-syncs, nothing more.
+ */
+export const persistWalletState = async (network: NetworkId, ctx: WalletContext): Promise<void> => {
+  const next: PersistedWalletState = {};
+  for (const kind of CHILD_KINDS) {
+    try {
+      const child = (ctx.wallet as unknown as Record<ChildKind, { serializeState: () => Promise<unknown> }>)[kind];
+      next[kind] = await child.serializeState();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`\n  Could not cache the ${kind} wallet (${message}); the next run will re-sync it.\n`);
+    }
+  }
+  if (Object.keys(next).length > 0) saveWalletState(network, next);
 };
 
 /** Wait until the wallet has caught up with the chain, with progress output. */
