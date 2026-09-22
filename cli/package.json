@@ -1,0 +1,52 @@
+{
+  "name": "@sealedbid/cli",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deployment and interaction tooling for the SealedBid contract.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc --project tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "wallet:address": "tsx src/address.ts",
+    "deploy": "tsx src/deploy.ts",
+    "deploy:undeployed": "tsx src/deploy.ts --network undeployed",
+    "deploy:preview": "tsx src/deploy.ts --network preview",
+    "deploy:preprod": "tsx src/deploy.ts --network preprod",
+    "cli": "tsx src/cli.ts",
+    "verify": "tsx src/verify.ts",
+    "verify:preview": "tsx src/verify.ts --network preview",
+    "verify:preprod": "tsx src/verify.ts --network preprod",
+    "verify:undeployed": "tsx src/verify.ts --network undeployed",
+    "devnet:up": "docker compose -f devnet.yml up -d --wait",
+    "devnet:down": "docker compose -f devnet.yml down -v",
+    "proof-server:up": "docker compose -f proof-server.yml up -d",
+    "proof-server:down": "docker compose -f proof-server.yml down"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.16.0",
+    "@midnight-ntwrk/midnight-js-contracts": "4.1.1",
+    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-level-private-state-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-network-id": "4.1.1",
+    "@midnight-ntwrk/midnight-js-node-zk-config-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-protocol": "4.1.1",
+    "@midnight-ntwrk/midnight-js-types": "4.1.1",
+    "@midnight-ntwrk/midnight-js-utils": "4.1.1",
+    "@midnight-ntwrk/wallet-sdk": "1.2.0",
+    "@sealedbid/contract": "1.0.0",
+    "dotenv": "^17.2.3",
+    "rxjs": "^7.8.2",
+    "ws": "^8.21.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3"
+  }
+}

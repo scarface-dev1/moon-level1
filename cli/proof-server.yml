@@ -1,0 +1,25 @@
+# Proof server only — use this when deploying to Preview or Preprod, where the
+# node and indexer are run by the network operators and only proving is local.
+#
+#   npm run proof-server:up      # docker compose -f proof-server.yml up -d
+#
+# Pinned to 8.1.0 to match the ledger-v8 8.1.0 that Midnight.js 4.1.1 pins
+# client-side. Never use a 9.x/10.x tag here: those target the ledger-9 line
+# and will produce proofs this contract's verifier keys do not accept.
+name: sealedbid-proof-server
+
+services:
+  proof-server:
+    image: midnightntwrk/proof-server:8.1.0
+    container_name: sealedbid-proof-server
+    command: ["midnight-proof-server -v"]
+    ports:
+      - "6300:6300"
+    environment:
+      RUST_BACKTRACE: "full"
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/6300"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s

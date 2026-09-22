@@ -17,6 +17,26 @@
     "test": "npm --workspace @sealedbid/contract test",
     "build": "npm --workspace @sealedbid/contract run build && npm --workspace @sealedbid/cli run build",
     "typecheck": "npm --workspace @sealedbid/contract run typecheck && npm --workspace @sealedbid/cli run typecheck",
-    "ci": "npm run compile && npm run build && npm run test"
+    "ci": "npm run compile && npm run build && npm run test",
+    "devnet:up": "npm --workspace @sealedbid/cli run devnet:up",
+    "devnet:down": "npm --workspace @sealedbid/cli run devnet:down",
+    "proof-server:up": "npm --workspace @sealedbid/cli run proof-server:up",
+    "wallet:address": "npm --workspace @sealedbid/cli run wallet:address",
+    "deploy": "npm --workspace @sealedbid/cli run deploy",
+    "cli": "npm --workspace @sealedbid/cli run cli",
+    "verify": "npm --workspace @sealedbid/cli run verify"
+  },
+  "overrides": {
+    "smoldot": "npm:empty-npm-package@1.0.0",
+    "@midnight-ntwrk/ledger-v8": "8.1.0",
+    "@midnight-ntwrk/midnight-js-network-id": "4.1.1",
+    "find-my-way": "^9.0.0",
+    "send": "^0.19.0",
+    "uuid": "^11.1.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "classic-level@3.0.0": true,
+    "msgpackr-extract@3.0.4": true
   }
 }
