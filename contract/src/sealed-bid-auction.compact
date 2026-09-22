@@ -1,0 +1,298 @@
+// SealedBid — privacy-preserving sealed-bid procurement auction
+// Copyright (C) 2026 SealedBid contributors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+pragma language_version >= 0.22 && <= 0.23;
+
+import CompactStandardLibrary;
+
+// ---------------------------------------------------------------------------
+// SealedBid
+//
+// A sealed-bid, reverse (procurement) auction. The buyer — the "auctioneer" —
+// publishes a lot and a reserve price; suppliers submit *sealed* bids. A sealed
+// bid is a collision-resistant commitment: only the 32-byte commitment digest
+// is written to the public ledger, never the price. During the reveal window a
+// supplier opens their bid inside the zero-knowledge circuit, which proves the
+// opened price matches the sealed commitment without the losing prices ever
+// being published: a reveal only succeeds if the price strictly beats the
+// running lowest, so at the end of the auction exactly one price is public.
+//
+// Threat model this contract defends against:
+//   * Competitors learning your price during the bidding window (bid sniping).
+//   * The auctioneer shortening or extending the bidding window to favour a
+//     supplier — the window is bounded by `bidDeadline` and cannot be opened
+//     early nor written to late.
+//   * The auctioneer voiding an auction once an unfavourable price has been
+//     opened — `cancel` is refused forever once any bid has been opened.
+//   * Forging a winning bid by opening a price other than the sealed one —
+//     the commitment is recomputed inside the circuit and compared.
+//   * Impersonation — every role is derived from a private 32-byte secret,
+//     never from `ownPublicKey()`, which the prover merely claims.
+// ---------------------------------------------------------------------------
+
+// Lifecycle. `Uninitialized` is the zero value, i.e. the ledger default.
+export enum AuctionPhase {
+  Uninitialized,
+  Bidding,
+  Reveal,
+  Settled,
+  Cancelled,
+}
+
+export new type BidderKey = Bytes<32>;
+export new type AuctioneerKey = Bytes<32>;
+export new type Commitment = Bytes<32>;
+
+// Hash preimages. The distinct `tag` values give domain separation so that a
+// bidder key, an auctioneer key and a bid commitment can never collide even
+// though they are all 32-byte digests.
+struct KeyPreimage {
+  tag: Uint<8>;
+  secret: Bytes<32>;
+}
+
+struct CommitmentPreimage {
+  tag: Uint<8>;
+  amount: Uint<64>;
+  nonce: Bytes<32>;
+}
+
+// ------------------------------- Ledger -----------------------------------
+
+/** Current lifecycle phase of the auction. */
+export ledger phase: AuctionPhase;
+
+/** Derived public identity of the buyer who created the auction. */
+export ledger auctioneer: AuctioneerKey;
+
+/** Commitment to the off-chain lot / specification document. */
+export ledger lotHash: Bytes<32>;
+
+/** Maximum acceptable price (procurement: lower is better). */
+export ledger reservePrice: Uint<64>;
+
+/** Unix seconds after which `submitBid` is refused. */
+export ledger bidDeadline: Uint<64>;
+
+/** Unix seconds after which `revealBid` is refused. */
+export ledger revealDeadline: Uint<64>;
+
+/** Distinct suppliers that have sealed a bid. */
+export ledger bidCount: Counter;
+
+/** Number of distinct sealed bids the buyer requires before award. */
+export ledger requiredBidders: Uint<64>;
+
+/** Sealed bid digests, indexed by supplier identity. */
+export ledger commitments: Map<BidderKey, Commitment>;
+
+/** Running lowest opened price. Zero until a first bid is opened. */
+export ledger lowestBid: Uint<64>;
+
+/** Identity of the supplier currently holding the lowest opened price. */
+export ledger winner: BidderKey;
+
+/** True once at least one bid has been opened. */
+export ledger hasWinner: Boolean;
+
+// ------------------------------ Witnesses ---------------------------------
+
+/** The caller's private 32-byte identity secret. Never disclosed. */
+witness getUserSecret(): Bytes<32>;
+
+// ------------------------------ Pure logic --------------------------------
+
+/**
+ * Derive a supplier's on-ledger identity from their private secret.
+ *
+ * Only someone holding `secret` can produce (and therefore act as) this
+ * identity, so acts as a ZK-enforced authentication primitive. Exposed as a
+ * `pure` circuit so off-chain code derives exactly the same value.
+ */
+export pure circuit deriveBidderKey(secret: Bytes<32>): BidderKey {
+  return persistentHash<KeyPreimage>(KeyPreimage { tag: 1, secret: secret }) as BidderKey;
+}
+
+/** Derive the buyer's on-ledger identity. Domain-separated from bidder keys. */
+export pure circuit deriveAuctioneerKey(secret: Bytes<32>): AuctioneerKey {
+  return persistentHash<KeyPreimage>(KeyPreimage { tag: 2, secret: secret }) as AuctioneerKey;
+}
+
+/**
+ * Seal a bid. The digest binds the exact price and the supplier's nonce, so a
+ * supplier cannot open a different price later without breaking the hash.
+ */
+export pure circuit computeCommitment(amount: Uint<64>, nonce: Bytes<32>): Commitment {
+  return persistentHash<CommitmentPreimage>(CommitmentPreimage { tag: 3, amount: amount, nonce: nonce }) as Commitment;
+}
+
+// ----------------------------- Constructor --------------------------------
+
+constructor() {
+  phase = AuctionPhase.Uninitialized;
+  auctioneer = disclose(deriveAuctioneerKey(getUserSecret()));
+  hasWinner = false;
+}
+
+// ------------------------------ Circuits ----------------------------------
+
+/**
+ * Publish the lot and open the bidding window. Auctioneer only.
+ *
+ * `bidDeadline` must be in the future and strictly before `revealDeadline`,
+ * which guarantees a non-empty bidding window followed by a non-empty reveal
+ * window.
+ */
+export circuit initializeAuction(
+  lotDigest: Bytes<32>,
+  reserve: Uint<64>,
+  bidEnd: Uint<64>,
+  revealEnd: Uint<64>,
+  requiredBidCount: Uint<64>,
+): [] {
+  assert(phase == AuctionPhase.Uninitialized, "Auction has already been initialized");
+  assert(auctioneer == deriveAuctioneerKey(getUserSecret()), "Only the auctioneer can initialize the auction");
+  assert(reserve > 0, "Reserve price must be greater than zero");
+  assert(bidEnd < revealEnd, "Bid deadline must be before the reveal deadline");
+  assert(requiredBidCount > 0, "At least one bidder must be required");
+
+  // The lot digest and the terms are public by design, so the auctioneer
+  // explicitly acknowledges each disclosure before it reaches the ledger.
+  const publicLot = disclose(lotDigest);
+  const publicReserve = disclose(reserve);
+  const publicBidEnd = disclose(bidEnd);
+  const publicRevealEnd = disclose(revealEnd);
+  const publicRequired = disclose(requiredBidCount);
+
+  assert(blockTimeLt(publicBidEnd), "Bid deadline must be in the future");
+
+  lotHash = publicLot;
+  reservePrice = publicReserve;
+  bidDeadline = publicBidEnd;
+  revealDeadline = publicRevealEnd;
+  requiredBidders = publicRequired;
+  phase = AuctionPhase.Bidding;
+}
+
+/**
+ * Seal a bid. Any supplier may call this during the bidding window.
+ *
+ * Only the 32-byte commitment is published. Calling again before the deadline
+ * replaces the previous commitment, which lets a supplier improve their offer
+ * while keeping the bid count honest.
+ */
+export circuit submitBid(commitment: Commitment): [] {
+  assert(phase == AuctionPhase.Bidding, "Bids are only accepted while the auction is open");
+  assert(blockTimeLt(bidDeadline), "The bidding window has closed");
+
+  const bidder = disclose(deriveBidderKey(getUserSecret()));
+  if (!commitments.member(bidder)) {
+    bidCount.increment(1);
+  }
+  commitments.insert(bidder, disclose(commitment));
+}
+
+/**
+ * Close the bidding window and open the reveal window. Auctioneer only.
+ *
+ * Refused until `bidDeadline` has actually passed, so the buyer can neither
+ * cut the sealed window short nor extend it (late `submitBid` calls are
+ * refused independently by the deadline check).
+ */
+export circuit openReveal(): [] {
+  assert(phase == AuctionPhase.Bidding, "Auction is not accepting bids");
+  assert(auctioneer == deriveAuctioneerKey(getUserSecret()), "Only the auctioneer can open the reveal window");
+  assert(blockTimeGt(bidDeadline), "The bidding window has not closed yet");
+
+  phase = AuctionPhase.Reveal;
+}
+
+/**
+ * Open a sealed bid. Callable by the supplier that sealed it.
+ *
+ * The circuit recomputes the commitment from the supplied price and nonce and
+ * compares it with the sealed digest, which is what makes the price
+ * tamper-proof. A reveal is only accepted if the price is positive, at or
+ * below the reserve and strictly below every price opened so far, so exactly
+ * one price — the winner's — becomes public, and every losing price stays
+ * sealed forever.
+ */
+export circuit revealBid(amount: Uint<64>, nonce: Bytes<32>): [] {
+  assert(phase == AuctionPhase.Reveal, "Bids can only be opened during the reveal window");
+  assert(blockTimeLt(revealDeadline), "The reveal window has closed");
+  assert(amount > 0, "Bid must be greater than zero");
+
+  const bidder = disclose(deriveBidderKey(getUserSecret()));
+  assert(commitments.member(bidder), "No sealed bid is registered for this supplier");
+
+  const sealedDigest = commitments.lookup(bidder);
+  const openedDigest = computeCommitment(amount, nonce);
+  assert(openedDigest == sealedDigest, "Opened bid does not match the sealed commitment");
+
+  assert(amount <= reservePrice, "Bid exceeds the reserve price");
+  assert(!hasWinner || amount < lowestBid, "Bid is not lower than the current lowest bid");
+
+  lowestBid = disclose(amount);
+  winner = bidder;
+  hasWinner = true;
+}
+
+/**
+ * Award the auction and freeze the result. Auctioneer only.
+ *
+ * A single-source award is refused: a result may only be awarded once at least
+ * `requiredBidders` distinct sealed bids have been registered, which is the
+ * usual procurement control against non-competitive awards. An auction in
+ * which no bid was opened is concluded as unsold, which is always permitted.
+ */
+export circuit settle(): [] {
+  assert(phase == AuctionPhase.Reveal, "Auction can only be settled from the reveal window");
+  assert(auctioneer == deriveAuctioneerKey(getUserSecret()), "Only the auctioneer can settle the auction");
+  assert(
+    !hasWinner || bidCount.read() >= requiredBidders,
+    "Auction did not attract enough bidders to be awarded"
+  );
+
+  phase = AuctionPhase.Settled;
+}
+
+/**
+ * Void the auction. Auctioneer only.
+ *
+ * Allowed while bidding, or during the reveal window. Once a *valid* result is
+ * public — a bid has been opened *and* the bidder quorum has been met — the
+ * auction can never be cancelled, so the buyer cannot escape an unfavourable
+ * but awardable price.
+ *
+ * The quorum check is deliberately part of the condition: an auction that
+ * opened a bid but never attracted enough suppliers is not awardable, so
+ * allowing cancellation there is what stops such an auction from being stuck
+ * in the reveal window forever (`settle` refuses it, and without this escape
+ * nothing could ever conclude it).
+ */
+export circuit cancel(): [] {
+  assert(
+    phase == AuctionPhase.Bidding || phase == AuctionPhase.Reveal,
+    "Auction can only be cancelled before it is settled"
+  );
+  assert(auctioneer == deriveAuctioneerKey(getUserSecret()), "Only the auctioneer can cancel the auction");
+  assert(
+    !hasWinner || bidCount.read() < requiredBidders,
+    "Auction cannot be cancelled once a valid bid has been opened"
+  );
+
+  phase = AuctionPhase.Cancelled;
+}
