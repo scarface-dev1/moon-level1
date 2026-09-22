@@ -1,0 +1,27 @@
+
+> sealedbid@1.0.0 test
+> npm --workspace @sealedbid/contract test
+
+
+> @sealedbid/contract@1.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/workspaces/moon-level1/contract[39m
+
+Sourcemap for "/workspaces/moon-level1/contract/src/managed/sealed-bid-auction/contract/index.js" points to missing source files
+ [32m✓[39m src/test/reveal.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 2070[2mms[22m[39m
+ [32m✓[39m src/test/security.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 1651[2mms[22m[39m
+ [32m✓[39m src/test/lifecycle.test.ts [2m([22m[2m22 tests[22m[2m)[22m[33m 1432[2mms[22m[39m
+ [32m✓[39m src/test/settlement.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1293[2mms[22m[39m
+     [33m[2m✓[22m[39m settles once enough suppliers have bid and a winner is known [33m 367[2mms[22m[39m
+ [32m✓[39m src/test/bidding.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1163[2mms[22m[39m
+ [32m✓[39m src/test/scenario.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 530[2mms[22m[39m
+     [33m[2m✓[22m[39m runs a full sealed-bid cycle across every circuit [33m 354[2mms[22m[39m
+ [32m✓[39m src/test/identity.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 474[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m97 passed[39m[22m[90m (97)[39m
+[2m   Start at [22m 15:45:33
+[2m   Duration [22m 10.61s[2m (transform 231ms, setup 0ms, import 644ms, tests 8.61s, environment 2ms)[22m
+

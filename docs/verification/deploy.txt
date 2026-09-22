@@ -1,0 +1,34 @@
+
+> @sealedbid/cli@1.0.0 deploy
+> tsx src/deploy.ts --network undeployed
+
+
+  ── SealedBid deploy ───────────────────────────────────────────
+  Deploying the sealed-bid auction to undeployed.
+
+  Network:  undeployed (local devnet (docker compose -f devnet.yml up -d --wait))
+  Wallet:   seed from local devnet genesis
+  Proof server is ready.                                 
+  Address:  mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s
+2026-09-22 15:44:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:9944/: 1000:: Normal Closure
+2026-09-22 15:44:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:9944/: 1000:: Normal Closure
+  synced with the network.                          
+  Balance:  250,000,000,000,000 tNIGHT
+  DUST:     1,250,000,000,000,000,000,000,000
+  Lot digest: 73a9761d9f3a11a9f0ec1635b7438d585b1739aeaf102b47eea65b35f0ceb1cb
+
+  Deploying contract...
+  Contract address: 37fcad3a26dc5dec1564b638c3554b819131c39e4ea95294a0463209605db2f5
+  Initialising the auction...
+  initializeAuction: waiting for DUST to accrue...                                                  
+  ── Deployed ───────────────────────────────────────────────────
+  Network:          undeployed (local devnet (docker compose -f devnet.yml up -d --wait))
+  Contract address: 37fcad3a26dc5dec1564b638c3554b819131c39e4ea95294a0463209605db2f5
+  Phase:            Bidding
+  Auctioneer key:   7aafa28f1c594a4df6e642b9d913462151451603e5ad9d9cd2a351f948b712fa
+  Lot digest:       73a9761d9f3a11a9f0ec1635b7438d585b1739aeaf102b47eea65b35f0ceb1cb
+  Deploy record:    deployments/undeployed.json
+  Lot document:     deployments/lot-undeployed.md
+
+  Verify with:      npm --workspace @sealedbid/cli run verify -- --network undeployed
+

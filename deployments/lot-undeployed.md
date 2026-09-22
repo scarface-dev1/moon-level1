@@ -12,10 +12,10 @@ Supply, deliver and install 40 rack-mount compute nodes to the specification pub
 | Term | Value |
 | --- | --- |
 | Reserve price (maximum acceptable) | 1,000,000 tNIGHT |
-| Bidding closes (unix seconds) | 1,790,085,572 |
-| Bidding closes (UTC) | 2026-09-22T13:59:32.000Z |
-| Opening closes (unix seconds) | 1,790,086,472 |
-| Opening closes (UTC) | 2026-09-22T14:14:32.000Z |
+| Bidding closes (unix seconds) | 1,790,092,754 |
+| Bidding closes (UTC) | 2026-09-22T15:59:14.000Z |
+| Opening closes (unix seconds) | 1,790,093,654 |
+| Opening closes (UTC) | 2026-09-22T16:14:14.000Z |
 | Suppliers required to award | 1 |
 
 ## Rules

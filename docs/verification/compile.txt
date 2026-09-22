@@ -1,0 +1,60 @@
+──────────────────────────────────────────────────────────────────────────────
+$ compact compile --version
+0.31.1
+
+$ "$COMPACT_TOOLCHAIN/compactc.bin" --language-version
+0.23.0
+
+$ "$COMPACT_TOOLCHAIN/compactc.bin" --ledger-version
+ledger-8.0.2
+
+$ "$COMPACT_TOOLCHAIN/compactc.bin" --runtime-version
+0.16.0
+
+──────────────────────────────────────────────────────────────────────────────
+$ rm -rf contract/src/managed
+
+$ npm run compile
+Compiling 6 circuits:
+
+# The six exported circuits the compiler just produced:
+  cancel
+  initializeAuction
+  openReveal
+  revealBid
+  settle
+  submitBid
+
+──────────────────────────────────────────────────────────────────────────────
+$ ls contract/src/managed/sealed-bid-auction
+compiler
+contract
+keys
+zkir
+
+$ git status --short contract/src/managed
+(no output — regenerated artifacts are byte-identical to the committed ones)
+
+──────────────────────────────────────────────────────────────────────────────
+$ INFO=contract/src/managed/sealed-bid-auction/compiler/contract-info.json
+
+$ jq -c '{compiler:."compiler-version", language:."language-version", runtime:."runtime-version"}' "$INFO"
+{"compiler":"0.31.1","language":"0.23.0","runtime":"0.16.0"}
+
+$ jq -r '.circuits[].name' "$INFO"
+deriveBidderKey
+deriveAuctioneerKey
+computeCommitment
+initializeAuction
+submitBid
+openReveal
+revealBid
+settle
+cancel
+
+──────────────────────────────────────────────────────────────────────────────
+$ wc -l contract/src/sealed-bid-auction.compact
+298 contract/src/sealed-bid-auction.compact
+
+$ du -sh contract/src/managed/sealed-bid-auction/keys
+17M	contract/src/managed/sealed-bid-auction/keys

@@ -1,0 +1,34 @@
+
+> @sealedbid/cli@1.0.0 verify
+> tsx src/verify.ts --network undeployed
+
+
+  ── SealedBid verification ─────────────────────────────────────
+  Network:            undeployed (local devnet (docker compose -f devnet.yml up -d --wait))
+  Indexer:            http://127.0.0.1:8088/api/v4/graphql
+  Contract address:   37fcad3a26dc5dec1564b638c3554b819131c39e4ea95294a0463209605db2f5
+
+  Phase:              Bidding
+  Auctioneer key:     7aafa28f1c594a4df6e642b9d913462151451603e5ad9d9cd2a351f948b712fa
+  Lot digest:         73a9761d9f3a11a9f0ec1635b7438d585b1739aeaf102b47eea65b35f0ceb1cb
+  Reserve price:      1,000,000
+  Bid deadline:       1790092754
+  Reveal deadline:    1790093654
+  Required bidders:   1
+  Sealed bids:        0 (0 distinct suppliers)
+  Lowest opened bid:  0
+  Winner:             <none>
+
+  Lot document:       deployments/lot-undeployed.md
+  Recomputed digest:  73a9761d9f3a11a9f0ec1635b7438d585b1739aeaf102b47eea65b35f0ceb1cb
+  Matches on chain:   YES
+
+  Recorded deployer:  mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s
+  Recorded at:        2026-09-22T15:45:08.344Z
+  Address matches deploy record: YES
+  Lot digest matches deploy record: YES
+
+  To reproduce this read directly, POST to the indexer:
+    curl -s http://127.0.0.1:8088/api/v4/graphql -H 'Content-Type: application/json' \
+      -d '{"query":"{ contractAction(address:\"37fcad3a26dc5dec1564b638c3554b819131c39e4ea95294a0463209605db2f5\") { state } }"}'
+
