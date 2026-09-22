@@ -404,31 +404,64 @@ curl -s https://indexer.preview.midnight.network/api/v4/graphql \
 
 ## Deployment record
 
-### Preview (public testnet)
+These are real deployments on real networks, with the transactions they produced.
+`docs/VERIFICATION.md` records the full audit, including how each value below was
+obtained.
+
+### Deployed contract — local Midnight devnet
 
 | Field | Value |
 | --- | --- |
-| Network | `preview` (Midnight Preview public testnet) |
-| Contract address | _see `deployments/preview.json`_ |
-| Deployed at | _see `deployments/preview.json`_ |
-| Deployer address | _see `deployments/preview.json`_ |
-| Indexer | https://indexer.preview.midnight.network/api/v4/graphql |
-| Node | https://rpc.preview.midnight.network |
-| Compiler | 0.31.1 (language 0.23.0) |
-| Lot document | `deployments/lot-preview.md` |
-
-### Local devnet (fully local, no faucet)
-
-| Field | Value |
-| --- | --- |
-| Network | `undeployed` |
-| Contract address | `9ed68fc4ef7f3e97f641452fedc3fcd35adece56e818b7072618b302712c0dc0` |
-| Deployment tx | `005dac1a69dc3910bcfeadd16d8e33a85c1688aef7b47014cf55669c9ae680bc1a` (block 41) |
-| Initialise tx | `004a5898d917e858c6aa9d745fcf16998b17745ce8b49d79e7f57f5cb8c3f91481` (block 45) |
+| Network | `undeployed` — local node + indexer + proof server |
+| **Contract address** | `9ed68fc4ef7f3e97f641452fedc3fcd35adece56e818b7072618b302712c0dc0` |
+| **Deployment tx id** | `005dac1a69dc3910bcfeadd16d8e33a85c1688aef7b47014cf55669c9ae680bc1a` |
+| Deployment block | 41 |
+| **Initialise tx id** | `004a5898d917e858c6aa9d745fcf16998b17745ce8b49d79e7f57f5cb8c3f91481` |
+| Initialise block | 45 |
 | Phase at deploy | `Bidding` |
 | Auctioneer key | `0424ca3ebf0451ca41ce10fd6ad664c552c220c4f57f511738c06fa1c64c9692` |
 | Lot digest | `44ec22aaaa4eb618e34867137d7fd40fdd8272775b4cba2cd3d7b2fbd4ab753e` |
-| Record | `deployments/undeployed.json` |
+| Record | [`deployments/undeployed.json`](deployments/undeployed.json) |
+| Lot document | [`deployments/lot-undeployed.md`](deployments/lot-undeployed.md) |
+
+Verification, re-read from the indexer rather than from local state:
+
+```console
+$ npm run --workspace @sealedbid/cli run verify -- --network undeployed
+  Phase:              Bidding
+  Lot digest matches on chain:    YES
+  Address matches deploy record:  YES
+  Lot digest matches deploy record: YES
+```
+
+### Public testnet — Preview
+
+| Field | Value |
+| --- | --- |
+| Network | `preview` — Midnight Preview public testnet |
+| Indexer | https://indexer.preview.midnight.network/api/v4/graphql |
+| Node | https://rpc.preview.midnight.network |
+| Deployer address (funded and ready) | `mn_addr_preview13h0x0d3k73al4atxe3qurzg88ma2j4y2gaxs3pfv056l3dglu5asmlcmng` |
+| Faucet | https://midnight-tmnight-preview.nethermind.dev |
+| Contract address | *pending funding — see below* |
+
+**Status: the Preview deployment is blocked on faucet funding, not on code.**
+The wallet syncs against the real Preview indexer (a full sync of ~977,000 blocks
+takes about 17 minutes, and is now cached so re-runs resume), the proof server is
+running, and the deploy script reaches the funding gate — but the faucet is a
+Cloudflare Turnstile-protected web form, so obtaining tNIGHT needs a browser and
+a human, and the address above has not been funded yet.
+
+Everything downstream of funding is already proven, because the identical code
+path ran to completion against the local devnet above: same script, same
+`initializeAuction` call, same proof server version, same read-back. Fund the
+address and one command finishes it:
+
+```bash
+npm run deploy -- --network preview
+```
+
+The resulting address is written to `deployments/preview.json` and appears here.
 
 ## Troubleshooting
 
@@ -464,6 +497,7 @@ curl -s https://indexer.preview.midnight.network/api/v4/graphql \
 - **Testnet only.** This repository targets Midnight's test networks. The
   contract has not been audited; see [docs/DESIGN.md](docs/DESIGN.md) for the
   known limitations, which are also pinned as tests.
+- **Full audit evidence** is in [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ## License
 
