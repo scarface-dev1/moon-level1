@@ -4,6 +4,12 @@ Every claim in this document was produced by running the command shown, in this
 repository, on the versions recorded below. Nothing here is asserted from
 memory.
 
+The raw stdout of every run quoted here is committed under
+[`verification/`](verification/), and the images in
+[`screenshots/`](screenshots/) are rendered from those transcripts by
+`scripts/render-screenshots.py`. Re-run `npm run evidence`, `npm test`,
+`npm run deploy` and `npm run verify` to reproduce them.
+
 ## Environment
 
 | Component | Version | How it was determined |
@@ -143,23 +149,27 @@ Deployed:
 
 ```console
 $ npm run deploy -- --network undeployed
-  [deploy]           address 9ed68fc4ef7f3e97f641452fedc3fcd35adece56e818b7072618b302712c0dc0
-                     tx 005dac1a69dc3910bcfeadd16d8e33a85c1688aef7b47014cf55669c9ae680bc1a in block 41
-  [initializeAuction] tx 004a5898d917e858c6aa9d745fcf16998b17745ce8b49d79e7f57f5cb8c3f91481 in block 45
+  Contract address: 37fcad3a26dc5dec1564b638c3554b819131c39e4ea95294a0463209605db2f5
+  Deploy tx:        005050cbed4ac228f497cafe418ef052421dff591edadb86aee00d5a2d49d6b58f in block 1238
+  initializeAuction: 003b54337dc7dd47262a50de68c4ad87266300246632a8a8e3ae325d1aa839c3e6 in block 1243
+  Phase:            Bidding
 ```
 
 Read back from the indexer and compared against the deployment record:
 
 ```console
 $ npm --workspace @sealedbid/cli run verify -- --network undeployed
-  Contract address:   9ed68fc4ef7f3e97f641452fedc3fcd35adece56e818b7072618b302712c0dc0
+  Contract address:   37fcad3a26dc5dec1564b638c3554b819131c39e4ea95294a0463209605db2f5
   Phase:              Bidding
-  Lot digest:         44ec22aaaa4eb618e34867137d7fd40fdd8272775b4cba2cd3d7b2fbd4ab753e
-  Recomputed digest:  44ec22aaaa4eb618e34867137d7fd40fdd8272775b4cba2cd3d7b2fbd4ab753e
+  Lot digest:         73a9761d9f3a11a9f0ec1635b7438d585b1739aeaf102b47eea65b35f0ceb1cb
+  Recomputed digest:  73a9761d9f3a11a9f0ec1635b7438d585b1739aeaf102b47eea65b35f0ceb1cb
   Matches on chain:   YES
   Address matches deploy record: YES
   Lot digest matches deploy record: YES
 ```
+
+Full transcripts: [`verification/deploy.txt`](verification/deploy.txt),
+[`verification/verify.txt`](verification/verify.txt).
 
 ## All six circuits on a live node
 
@@ -169,24 +179,33 @@ from the indexer:
 
 ```console
 $ npm --workspace @sealedbid/cli run demo -- --network undeployed
-  [deploy]          address 69b5f65265d56d34ba3ccdd4610453386b3c99db7a2a32c51517ab961a9c3f32
-                    tx 0086ad60ce8d7428c6de5bb797a3b1f6c225ec934a8549d2b44668bbfe5aa9d6c4 in block 206
-  [initializeAuction] tx 00e86c0afb58d71b130c50c57ef0cbac592c33025e71ffb81b0712f91e236a2ac3 in block 150
-  [submitBid]       tx 003f3334a49b7c2fd2e75c7222e355b7ce760bf8cd446d67759b49fa111d90de54 in block 155
+  [deploy]          address 762aab3c16dd7f3126e58857407b92b7e4ab97619b5672312dda08d33defe623
+                    tx 00824ab48a70d3a8ff1531e867e45b7c576f36f9358d8d2e620b73c9c4496b461d in block 1327
+  [initializeAuction] tx 00bd7637ed35355fab0d2124c607b3d1f3654f7632de9b0f15155916734cc0694a in block 1332
+  [submitBid]       tx 00e19a8c8cbc2ed0d320f0e79bd79d23b793608d629f0cc835912ed25b51b3ad94 in block 1337
+                    sealed 876544 as 9355f8fb2d30264d403a4fcc68bb3c796c94d31713898abc5ba343fa82513387
   Early openReveal refused: YES (as designed)
-  [openReveal]      tx 0061fd4e4b4e9f7ee8a47323d2c5996c8c3f05044ee525fef16febbbe6eb488dd0 in block 164
-  [revealBid]       tx 0056d1449a08d3d3791fb83d02534a050e7643c3871dfdd29dd142ab8c77de9182 in block 169
-  [settle]          tx 00ab53591f7d12743fa59c1dc9a2cfeba0f2e57eeb6fc96f21629c05bd64cd1ace in block 174
-  [cancel]          tx ... (second auction)
-  Cancelled auction 33a9537f43953d37cc7dac3c2976f53dcf25b0e1b954aab86df019d7ef73dfa7 phase: Cancelled
+  [openReveal]      tx 0064542aaf8f4f05e9fd4212c150ce35add8e2dde1a3cb68dfb7e2475ec3519054 in block 1347
+  [revealBid]       tx 0082577a2e22ca3da406619b80c676dbd9be375e6ba93af1abc65eb3acb2edbc5d in block 1352
+  [settle]          tx 00c3df4be39c885cd1126f429df0e3123e9320b3bef43f42f3de75eb7c1c74b8cc in block 1357
+  [cancel]          tx 006ca740402ea47a800d8bfe4da797df583a2899b631b5de8404b976cd098cbf08 in block 1371
+  Cancelled auction 0e826ff3ba9d1201825427dde8fc75ea14c65f73d3d678632357e78e966f07ee phase: Cancelled
 
   ── On-chain result ──
+  Contract address:   762aab3c16dd7f3126e58857407b92b7e4ab97619b5672312dda08d33defe623
   Phase:              Settled
   Sealed bids:        1
   Lowest opened bid:  876544 (expected 876544)
   Winner is me:       YES
   Lot digest matches: YES
 ```
+
+Every one of the six circuits produced a real transaction here. Note the two
+negative results the node itself enforced: `Early openReveal refused: YES` (the
+contract will not open the window before `bidDeadline`) and the second lot
+reaching `Cancelled` only because no valid bid had been opened. Full transcript:
+[`verification/demo.txt`](verification/demo.txt),
+screenshot: [`screenshots/demo.png`](screenshots/demo.png).
 
 This is the strongest evidence available without a funded public-testnet wallet:
 every circuit proved by a real proof server, submitted to a real node, and the

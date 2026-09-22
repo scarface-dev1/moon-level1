@@ -17,10 +17,53 @@ auctioneer or an escrow server.
 
 ---
 
+## Screenshots
+
+Every image below is rendered from a real captured run — the raw transcripts are
+committed under [`docs/verification/`](docs/verification) and the PNGs are
+generated from them by `scripts/render-screenshots.py`, so nothing here is a
+mock-up.
+
+### Compiling — six circuits, real prover keys
+
+![compact compile reporting six circuits](docs/screenshots/compile.png)
+
+Full transcript: [`docs/verification/compile.txt`](docs/verification/compile.txt)
+
+### Deploying — a real contract address on chain
+
+![sealedbid deploy printing the contract address](docs/screenshots/deploy.png)
+
+Full transcript: [`docs/verification/deploy.txt`](docs/verification/deploy.txt)
+
+### Verifying — state read back from the indexer
+
+![sealedbid verify reading contract state from the indexer](docs/screenshots/verify.png)
+
+Full transcript: [`docs/verification/verify.txt`](docs/verification/verify.txt)
+
+### All six circuits on chain
+
+A full auction — bid sealed, an early reveal refused by the node, then opened,
+awarded and a second lot cancelled — every step a real transaction.
+
+![sealedbid demo running all six circuits against a live node and proof server](docs/screenshots/demo.png)
+
+Full transcript: [`docs/verification/demo.txt`](docs/verification/demo.txt)
+
+### Testing — 97 tests driving the generated circuits
+
+![vitest running the SealedBid test suite](docs/screenshots/tests.png)
+
+Full transcript: [`docs/verification/tests.txt`](docs/verification/tests.txt)
+
+---
+
 ## Table of contents
 
 - [Why this exists](#why-this-exists)
 - [How it works](#how-it-works)
+- [Public state vs. private witness](#public-state-vs-private-witness)
 - [Repository structure](#repository-structure)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
@@ -110,15 +153,91 @@ authorisation that depends on it is bypassable. Authorisation here means "prove
 you know the preimage of the identity stored on the ledger", which the ZK proof
 enforces.
 
-### Privacy summary
+## Public state vs. private witness
 
-| Data | Where it lives | Public? |
+A Compact contract has two halves, and SealedBid's entire security argument is
+about keeping them straight. **Ledger state** is public: it is replicated and
+readable by anyone. **Witnesses** are private: they are read on the prover's own
+machine, and the proof that is sent to the network says nothing about them.
+
+### What is public (ledger state)
+
+Declared with `ledger` in
+[`contract/src/sealed-bid-auction.compact`](contract/src/sealed-bid-auction.compact)
+and visible to every observer of the chain:
+
+```compact
+ledger phase: AuctionPhase;                     // Uninitialized | Bidding | Reveal | Settled | Cancelled
+ledger auctioneer: AuctioneerKey;               // the buyer's derived public identity
+ledger lotHash: Bytes<32>;                      // commitment to the lot document
+ledger reservePrice: Uint<64>;                  // ceiling on acceptable prices
+ledger bidDeadline: Uint<64>;                   // bids are refused after this
+ledger revealDeadline: Uint<64>;                // reveals are refused after this
+ledger bidCount: Counter;                       // distinct suppliers that sealed a bid
+ledger requiredBidders: Uint<64>;               // quorum needed before award
+ledger commitments: Map<BidderKey, Commitment>; // sealed bids: digest only, never a price
+ledger lowestBid: Uint<64>;                     // running minimum — the only price ever written
+ledger winner: BidderKey;                       // current holder of the lowest opened bid
+ledger hasWinner: Boolean;                      // true once any bid has been opened
+```
+
+Reading that list is the whole privacy story: there is **no price field for a
+losing bid anywhere on the ledger**. A bid that is not leading is represented
+only by an opaque 32-byte `Commitment` keyed by a derived identity. The single
+`lowestBid` slot is overwritten as each successive lower price is opened, so
+what ends up committed publicly is the winner's price and nothing else.
+
+### What is private (witness state)
+
+The contract declares exactly one witness, and it never reaches the network:
+
+```compact
+witness getUserSecret(): Bytes<32>;   // the caller's private identity secret
+```
+
+Its implementation lives in
+[`contract/src/witnesses.ts`](contract/src/witnesses.ts) and pulls a 32-byte
+secret out of the private state, which the CLI keeps encrypted at rest in
+`cli/midnight-level-db/`:
+
+```ts
+type SealedBidPrivateState = { readonly identitySecret: Uint8Array };
+```
+
+Everything the contract knows about *who is calling* — and every price — is
+derived from material held privately and proven about, rather than published:
+
+| Value | Held as | Public? |
 | --- | --- | --- |
-| Identity secret | Private state, encrypted at rest | No |
-| Bid nonce | Private state, encrypted at rest | No |
-| Bid amount | Private state until opened | Only if it takes the lead |
-| Bid commitment | Ledger | Yes (a 32-byte digest) |
-| Lot text | Published as a file, committed by digest | Yes |
+| Identity secret | Witness input, encrypted private state | **No** — never disclosed |
+| Bid nonce | Witness input, encrypted private state | **No** — `disclose` is never applied to it |
+| Bid amount | Witness input until the bid is opened | **Only if it takes the lead** |
+| Bid commitment | `ledger.commitments` | Yes — a 32-byte digest |
+| Derived identity | `ledger.auctioneer`, `ledger.winner` | Yes — unlinkable to the wallet that paid |
+| Lot text | Published file, committed by digest | Yes |
+
+### How the two halves meet
+
+The bridge is `disclose(...)`. A private value only reaches the ledger when the
+source explicitly discloses it, and the compiler *refuses to build* a circuit
+where a witness-derived value flows to public state without being declared. That
+is why the constructor reads:
+
+```compact
+auctioneer = disclose(deriveAuctioneerKey(getUserSecret()));
+```
+
+The secret stays private; the derived key is deliberately published. In
+`revealBid`, the amount is checked against the sealed commitment and compared
+against `lowestBid`, and only then is it disclosed — as the new running minimum.
+A provider whose price is not the lowest cannot produce a valid proof at all,
+which is precisely why their price is never disclosed by anyone.
+
+Note also what is **not** used: `ownPublicKey()`. It returns a value the prover
+merely claims and carries no binding to the transaction signer, so it is usable
+as a label but not as an authorisation check. Authorisation here is "prove you
+know the preimage of the identity recorded on the ledger", which the proof
+enforces.
 
 ## Repository structure
 
@@ -160,7 +279,12 @@ enforces.
 ├── deployments/                         Public deployment records (committed)
 ├── docs/
 │   ├── DESIGN.md                        Contract design, invariants and threat model
-│   └── VERIFICATION.md                  Acceptance-audit evidence
+│   ├── VERIFICATION.md                  Acceptance-audit evidence
+│   ├── screenshots/                     PNGs rendered from the transcripts below
+│   └── verification/                    Captured stdout of real runs (compile, tests, deploy, verify)
+├── scripts/
+│   ├── evidence.sh                      Recompile from source and re-capture the compile transcript
+│   └── render-screenshots.py            Render docs/verification/*.txt into docs/screenshots/*.png
 ├── .compact-version                     Pinned compiler version (0.31.1)
 ├── .nvmrc
 └── package.json                         npm workspaces root
@@ -255,6 +379,8 @@ Also useful:
 ```bash
 npm run typecheck        # both workspaces
 npm run ci               # compile + build + test, as CI runs it
+npm run evidence         # delete managed/, recompile, prove the output is reproducible
+npm run screenshots      # re-render docs/screenshots/ from docs/verification/ (needs Pillow)
 ```
 
 ## Generating artifacts
@@ -413,26 +539,36 @@ obtained.
 | Field | Value |
 | --- | --- |
 | Network | `undeployed` — local node + indexer + proof server |
-| **Contract address** | `9ed68fc4ef7f3e97f641452fedc3fcd35adece56e818b7072618b302712c0dc0` |
-| **Deployment tx id** | `005dac1a69dc3910bcfeadd16d8e33a85c1688aef7b47014cf55669c9ae680bc1a` |
-| Deployment block | 41 |
-| **Initialise tx id** | `004a5898d917e858c6aa9d745fcf16998b17745ce8b49d79e7f57f5cb8c3f91481` |
-| Initialise block | 45 |
+| **Contract address** | `37fcad3a26dc5dec1564b638c3554b819131c39e4ea95294a0463209605db2f5` |
+| **Deployment tx id** | `005050cbed4ac228f497cafe418ef052421dff591edadb86aee00d5a2d49d6b58f` |
+| Deployment block | 1238 |
+| **Initialise tx id** | `003b54337dc7dd47262a50de68c4ad87266300246632a8a8e3ae325d1aa839c3e6` |
+| Initialise block | 1243 |
+| Deployed at | 2026-09-22T15:45:08Z |
 | Phase at deploy | `Bidding` |
-| Auctioneer key | `0424ca3ebf0451ca41ce10fd6ad664c552c220c4f57f511738c06fa1c64c9692` |
-| Lot digest | `44ec22aaaa4eb618e34867137d7fd40fdd8272775b4cba2cd3d7b2fbd4ab753e` |
+| Auctioneer key | `7aafa28f1c594a4df6e642b9d913462151451603e5ad9d9cd2a351f948b712fa` |
+| Lot digest | `73a9761d9f3a11a9f0ec1635b7438d585b1739aeaf102b47eea65b35f0ceb1cb` |
 | Record | [`deployments/undeployed.json`](deployments/undeployed.json) |
 | Lot document | [`deployments/lot-undeployed.md`](deployments/lot-undeployed.md) |
+| Deploy screenshot | [`docs/screenshots/deploy.png`](docs/screenshots/deploy.png) |
 
 Verification, re-read from the indexer rather than from local state:
 
 ```console
 $ npm run --workspace @sealedbid/cli run verify -- --network undeployed
+  Contract address:   37fcad3a26dc5dec1564b638c3554b819131c39e4ea95294a0463209605db2f5
   Phase:              Bidding
-  Lot digest matches on chain:    YES
-  Address matches deploy record:  YES
+  Lot digest:         73a9761d9f3a11a9f0ec1635b7438d585b1739aeaf102b47eea65b35f0ceb1cb
+  Recomputed digest:  73a9761d9f3a11a9f0ec1635b7438d585b1739aeaf102b47eea65b35f0ceb1cb
+  Matches on chain:   YES
+  Address matches deploy record: YES
   Lot digest matches deploy record: YES
 ```
+
+Every value above was produced by the commands in this README, captured in
+[`docs/verification/deploy.txt`](docs/verification/deploy.txt) and
+[`docs/verification/verify.txt`](docs/verification/verify.txt). There is no
+hand-written address anywhere in this repository.
 
 ### Public testnet — Preview
 
