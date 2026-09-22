@@ -1,0 +1,34 @@
+# Host-network override for the local devnet.
+#
+#   docker compose -f devnet.yml -f devnet.host-override.yml up -d --wait
+#
+# Use this only if the default (bridge) devnet does not work on your machine.
+# The symptom is that the containers come up healthy but the indexer logs
+#
+#   chain-indexer exited with ERROR: create SubxtNode: cannot create
+#   reconnecting subxt RPC client: Connection timeout exceeded: 10s
+#
+# because it cannot reach `node:9944` over the project network. Some sandboxed
+# and cloud-hosted Docker environments block traffic on user-defined bridges
+# while still allowing the default bridge. Running every service in the host
+# network namespace sidesteps the bridge entirely and connects them over
+# loopback.
+#
+# Host networking is a Linux feature. On Docker Desktop for macOS/Windows it
+# requires the "Enable host networking" beta setting, so try the default devnet
+# first: `docker compose -f devnet.yml up -d --wait`.
+name: sealedbid-devnet
+
+services:
+  node:
+    network_mode: host
+
+  indexer:
+    network_mode: host
+    # Over loopback rather than the compose service alias.
+    environment:
+      APP__INFRA__NODE__URL: "ws://127.0.0.1:9944"
+      APP__INFRA__SPO_NODE__URL: "ws://127.0.0.1:9944"
+
+  proof-server:
+    network_mode: host

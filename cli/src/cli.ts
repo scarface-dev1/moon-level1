@@ -32,6 +32,7 @@ import {
 } from './private-state.js';
 import { intFromEnv, lotDigestOf, renderLotDocument } from './lot.js';
 import { PRIVATE_STATE_ID } from './auction.js';
+import { submitWithRetry } from './submit.js';
 
 const rl = readline.createInterface({ input, output });
 
@@ -147,12 +148,14 @@ const main = async (): Promise<void> => {
           const deployed = await deployAuction(session.providers, compiled, privateState);
           callTx.current = deployed.callTx;
           activeAddress = deployed.contractAddress;
-          await deployed.callTx.initializeAuction(
-            digest,
-            terms.reservePrice,
-            terms.bidDeadline,
-            terms.revealDeadline,
-            terms.requiredBidders,
+          await submitWithRetry('initializeAuction', () =>
+            deployed.callTx.initializeAuction(
+              digest,
+              terms.reservePrice,
+              terms.bidDeadline,
+              terms.revealDeadline,
+              terms.requiredBidders,
+            ),
           );
           fs.mkdirSync(`${repoRoot}/deployments`, { recursive: true });
           fs.writeFileSync(`${repoRoot}/deployments/lot-${network}.md`, document);
@@ -170,7 +173,7 @@ const main = async (): Promise<void> => {
           const amount = await askBigInt('Bid amount (hidden until you open it):');
           const nonce = newNonce();
           const commitment = sealBid(amount, nonce);
-          await callTx.current!.submitBid(commitment);
+          await submitWithRetry('submitBid', () => callTx.current!.submitBid(commitment));
           privateState = recordSealedBid(privateState, address, amount, nonce);
           await savePrivateState(session, privateState);
           console.log(`  Sealed. Commitment ${hex(commitment)}`);
@@ -181,7 +184,9 @@ const main = async (): Promise<void> => {
           const address = requireAttached();
           const sealed = findOpenableBid(privateState, address);
           if (!sealed) throw new Error('This wallet has no unopened sealed bid for that auction.');
-          const tx = await callTx.current!.revealBid(BigInt(sealed.amount), fromHex(sealed.nonce));
+          const tx = await submitWithRetry('revealBid', () =>
+            callTx.current!.revealBid(BigInt(sealed.amount), fromHex(sealed.nonce)),
+          );
           privateState = markBidOpened(privateState, sealed);
           await savePrivateState(session, privateState);
           console.log(`  Opened bid: ${sealed.amount}`);
@@ -194,19 +199,19 @@ const main = async (): Promise<void> => {
         }
         case '6': {
           requireAttached();
-          const tx = await callTx.current!.openReveal();
+          const tx = await submitWithRetry('openReveal', () => callTx.current!.openReveal());
           console.log(`  Reveal window open. Transaction ${tx.public.txId}`);
           break;
         }
         case '7': {
           requireAttached();
-          const tx = await callTx.current!.settle();
+          const tx = await submitWithRetry('settle', () => callTx.current!.settle());
           console.log(`  Awarded. Transaction ${tx.public.txId}`);
           break;
         }
         case '8': {
           requireAttached();
-          const tx = await callTx.current!.cancel();
+          const tx = await submitWithRetry('cancel', () => callTx.current!.cancel());
           console.log(`  Cancelled. Transaction ${tx.public.txId}`);
           break;
         }

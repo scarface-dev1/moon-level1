@@ -33,6 +33,14 @@ logs/
 leveldb/
 .midnight-state/
 
+# Midnight wallet + private state stores. These hold the wallet seed and the
+# (encrypted) contract private state - the identity secret behind every role and
+# the nonce behind every sealed bid. Never commit them.
+.midnight-wallet.json
+midnight-level-db/
+**/midnight-level-db/
+
+
 # Deployment records are committed (they are public on-chain data), but the
 # local scratch copies produced while testing are not.
 deployments/*.local.json

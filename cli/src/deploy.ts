@@ -8,6 +8,7 @@ import { NETWORK_CONFIGS, networkFromArgv, repoRoot, writeDeploymentRecord } fro
 import { deployAuction, hex, makeCompiledContract, phaseName, readAuctionLedger } from './auction.js';
 import { initialPrivateState, toHex } from './private-state.js';
 import { intFromEnv, lotDigestOf, renderLotDocument, type AuctionTerms } from './lot.js';
+import { submitWithRetry } from './submit.js';
 
 const CONTRACT_PACKAGE_VERSION = '1.0.0';
 const COMPILER_VERSION = '0.31.1';
@@ -60,12 +61,14 @@ const main = async (): Promise<void> => {
   console.log(`  Contract address: ${auction.contractAddress}`);
 
   console.log('  Initialising the auction...');
-  const initTx = await auction.callTx.initializeAuction(
-    lotDigest,
-    terms.reservePrice,
-    terms.bidDeadline,
-    terms.revealDeadline,
-    terms.requiredBidders,
+  const initTx = await submitWithRetry('initializeAuction', () =>
+    auction.callTx.initializeAuction(
+      lotDigest,
+      terms.reservePrice,
+      terms.bidDeadline,
+      terms.revealDeadline,
+      terms.requiredBidders,
+    ),
   );
 
   const ledger = await readAuctionLedger(session.providers, auction.contractAddress);

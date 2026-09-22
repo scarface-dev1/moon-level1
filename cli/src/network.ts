@@ -103,9 +103,18 @@ const writeWalletStore = (store: WalletStore): void => {
   fs.chmodSync(WALLET_STORE_PATH, 0o600);
 };
 
+/**
+ * The seed the local devnet's `dev` preset pre-mints NIGHT to.
+ *
+ * The devnet has no faucet, so the only funded wallet is this one. It is a
+ * public, well-known constant that exists purely so local development needs no
+ * funding step — it must never be used on a public network.
+ */
+export const LOCAL_DEVNET_SEED = '0000000000000000000000000000000000000000000000000000000000000001';
+
 export interface ResolvedWallet {
   readonly seed: string;
-  readonly source: 'MIDNIGHT_SEED' | 'wallet store' | 'newly generated';
+  readonly source: 'MIDNIGHT_SEED' | 'wallet store' | 'newly generated' | 'local devnet genesis';
   readonly created: boolean;
 }
 
@@ -124,6 +133,12 @@ export const resolveWallet = (network: NetworkId): ResolvedWallet => {
       throw new Error('MIDNIGHT_SEED must be 64 hex characters (32 bytes).');
     }
     return { seed: fromEnv.toLowerCase(), source: 'MIDNIGHT_SEED', created: false };
+  }
+
+  // The local devnet pre-mints to one known wallet; generating a fresh seed
+  // there would produce an unfunded address with no faucet to fix it.
+  if (network === 'undeployed') {
+    return { seed: LOCAL_DEVNET_SEED, source: 'local devnet genesis', created: false };
   }
 
   const store = readWalletStore();
