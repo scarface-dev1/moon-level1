@@ -24,7 +24,9 @@
     "wallet:address": "npm --workspace @sealedbid/cli run wallet:address",
     "deploy": "npm --workspace @sealedbid/cli run deploy",
     "cli": "npm --workspace @sealedbid/cli run cli",
-    "verify": "npm --workspace @sealedbid/cli run verify"
+    "verify": "npm --workspace @sealedbid/cli run verify",
+    "evidence": "bash scripts/evidence.sh",
+    "screenshots": "python3 scripts/render-screenshots.py"
   },
   "overrides": {
     "smoldot": "npm:empty-npm-package@1.0.0",
