@@ -4,14 +4,15 @@
 
 import 'dotenv/config';
 import { NETWORK_CONFIGS, networkFromArgv, resolveWallet } from './network.js';
-import { buildWallet, stopWallet, waitForSync } from './wallet.js';
+import { buildWallet, stopWallet } from './wallet.js';
 
 /**
  * Print the address this CLI will use, so it can be funded before a deploy.
  *
- * Runs without DUST, funds or a proof server — deriving an address is purely
- * local. If the wallet file does not exist yet, this is also what creates it,
- * with 0600 permissions.
+ * Deliberately does not sync: deriving an address is local and instant, and the
+ * whole point is to show it *before* a long sync. Does not need funds, DUST or
+ * a proof server. If the wallet file does not exist yet, this is what creates
+ * it, with 0600 permissions.
  */
 const main = async (): Promise<void> => {
   const network = networkFromArgv();
@@ -19,13 +20,13 @@ const main = async (): Promise<void> => {
   const resolved = resolveWallet(network);
 
   const wallet = await buildWallet(network, config, resolved.seed);
-  await waitForSync(wallet.wallet);
+  const address = wallet.unshieldedKeystore.getBech32Address().toString();
   await stopWallet(wallet);
 
   console.log('');
   console.log(`  Network:  ${network} (${config.description})`);
   console.log(`  Seed:     ${resolved.source}`);
-  console.log(`  Address:  ${wallet.unshieldedKeystore.getBech32Address().toString()}`);
+  console.log(`  Address:  ${address}`);
   if (config.faucet) {
     console.log(`  Faucet:   ${config.faucet}`);
   }
