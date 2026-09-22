@@ -1,0 +1,22 @@
+{
+  "name": "sealedbid",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SealedBid — a privacy-preserving sealed-bid procurement auction built on the Midnight Network with Compact.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "workspaces": [
+    "contract",
+    "cli"
+  ],
+  "scripts": {
+    "compile": "npm --workspace @sealedbid/contract run compact",
+    "test": "npm --workspace @sealedbid/contract test",
+    "build": "npm --workspace @sealedbid/contract run build && npm --workspace @sealedbid/cli run build",
+    "typecheck": "npm --workspace @sealedbid/contract run typecheck && npm --workspace @sealedbid/cli run typecheck",
+    "ci": "npm run compile && npm run build && npm run test"
+  }
+}

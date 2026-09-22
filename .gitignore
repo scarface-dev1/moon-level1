@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test output
+coverage/
+reports/
+.history/
+
+# Compact compiler artifacts are committed on purpose (see README "Artifacts"),
+# but the whole build tree is not.
+*.zip
+
+# Secrets — never commit these
+.env
+.env.*
+!.env.example
+*.key
+!*.verifier
+!*.prover
+secrets/
+*.seed
+wallet-seed.txt
+private-keys/
+
+# Local runtime state
+logs/
+*.log
+.private-state/
+leveldb/
+.midnight-state/
+
+# Deployment records are committed (they are public on-chain data), but the
+# local scratch copies produced while testing are not.
+deployments/*.local.json
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
